@@ -24,7 +24,7 @@ from pyflink.common.typeinfo import Types
 from pyflink.common.watermark_strategy import TimestampAssigner, WatermarkStrategy
 from pyflink.datastream import StreamExecutionEnvironment, TimeCharacteristic
 from pyflink.datastream.connectors import FlinkKafkaProducer, FlinkKafkaConsumer
-from pyflink.datastream.functions import Collector, KeyedProcessFunction
+from pyflink.datastream.functions import KeyedProcessFunction
 
 from functions import MyKeySelector
 
@@ -51,7 +51,7 @@ def python_data_stream_example():
 
     kafka_consumer.set_start_from_earliest()
     ds = env.add_source(kafka_consumer).assign_timestamps_and_watermarks(watermark_strategy)
-    ds.key_by(MyKeySelector(), key_type_info=Types.LONG()) \
+    ds.key_by(MyKeySelector(), key_type=Types.LONG()) \
         .process(MyProcessFunction(), output_type=Types.STRING()) \
         .add_sink(kafka_producer)
     env.execute_async("test data stream timer")
@@ -59,15 +59,15 @@ def python_data_stream_example():
 
 class MyProcessFunction(KeyedProcessFunction):
 
-    def process_element(self, value, ctx: 'KeyedProcessFunction.Context', out: Collector):
+    def process_element(self, value, ctx: 'KeyedProcessFunction.Context'):
         result = "Current key: {}, orderId: {}, payAmount: {}, timestamp: {}".format(
             str(ctx.get_current_key()), str(value[1]), str(value[2]), str(ctx.timestamp()))
-        out.collect(result)
+        yield result
         current_watermark = ctx.timer_service().current_watermark()
         ctx.timer_service().register_event_time_timer(current_watermark + 1500)
 
-    def on_timer(self, timestamp, ctx: 'KeyedProcessFunction.OnTimerContext', out: 'Collector'):
-        out.collect("On timer timestamp: " + str(timestamp))
+    def on_timer(self, timestamp, ctx: 'KeyedProcessFunction.OnTimerContext'):
+        yield "On timer timestamp: " + str(timestamp)
 
 
 class KafkaRowTimestampAssigner(TimestampAssigner):
